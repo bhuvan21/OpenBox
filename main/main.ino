@@ -5,6 +5,7 @@
  #include <avr/power.h>
 #endif
 #include <avr/sleep.h>
+#include <Encoder.h>
 
 #define LED_PIN    A0
 #define LED_COUNT 4
@@ -17,6 +18,17 @@ LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 int timeSinceInteraction = 9999;
 long lastInteraction = 0;
+
+int rotarySelection = 0;
+int baseLine = 0;
+Encoder myEnc(2, 3);
+
+int menuIndex = 0;
+
+
+
+
+
 
 void setup() {
 
@@ -38,9 +50,15 @@ void setup() {
 
   pinMode(BUTTON, INPUT);
   pciSetup(BUTTON);
+  updateScreen();
 }
 
 void loop() {
+  delay(50);
+  
+  
+  
+  
   timeSinceInteraction = millis() - lastInteraction;
   if (timeSinceInteraction > 10000){
     
@@ -51,14 +69,79 @@ void loop() {
     sleep_cpu();//activating sleep mode
   }
   else {
-    // Stay awake
-    lcd.clear();
-    lcd.print("AWAKE");
+    long newPos = myEnc.read();
+    lcd.setCursor(15, 0);
+     lcd.print(String(newPos));
+      if (newPos != rotarySelection) {
+        if (abs(rotarySelection - newPos) > 5) {
+          lastInteraction = millis();
+          rotarySelection = floor(newPos/25.0);
+          updateScreen();
+        }
+        
+      }
     
   }
   
 
 }
+
+void updateScreen() {
+  lcd.clear();
+  String options[10] = {"Back", "Back", "Back", "Back", "Back", "Back", "Back", "Back", "Back", "Back"};
+  if (menuIndex == 0) {
+    options[0] = "Option 1";
+    options[1] = "Option 2";
+  }
+  else if (menuIndex == 1) {
+    options[0] = "SubOption1";
+    options[1] = "SubOption2";
+  }
+
+  int optionCount = 0;
+  int startIndex = 0;
+  int endIndex = 0;
+
+  
+  
+  for (int i = 0; i < 10; i++) {
+    if (options[i] == "Back") {
+      optionCount = i+1;
+      break;
+    }
+  }
+
+  if ((rotarySelection - baseLine) > optionCount) {
+    baseLine = (rotarySelection - baseLine) - optionCount;
+  }
+
+  if (optionCount <=4) {
+    endIndex = optionCount-1;
+  }
+  else {
+    int selection = (rotarySelection - baseLine);
+    if (selection <=4) {
+      endIndex = 4;
+    }
+    else {
+      startIndex = selection;
+      endIndex = startIndex+4;
+    }
+  }
+
+  for (int i = startIndex; i < endIndex+1;i++) {
+    lcd.setCursor(0, i-startIndex);
+    if (i == (rotarySelection - baseLine)) {
+      lcd.print(">");
+    }
+    lcd.print(options[i]);
+
+  }
+  lcd.setCursor(4, 20);
+  
+
+}
+
 
 void pciSetup(byte pin)
 {
@@ -86,10 +169,8 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
 void interruptTriggered(int i) {
   if (i == 1) {
     bool buttonState = digitalRead(BUTTON);
-    if (buttonState == HIGH) {
       lastInteraction = millis();
       sleep_disable();//Disable sleep mode
       
-    }
   }
 }

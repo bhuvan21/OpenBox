@@ -1,7 +1,7 @@
 #include <Encoder.h>
 #include <LiquidCrystal.h>
 
-Encoder myEnc(3, 2);
+Encoder myEnc(2, 3);
 const int rs = 12, en = 11, d4 = 4, d5 = 5, d6 = 6, d7 = 7;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
