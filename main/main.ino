@@ -26,6 +26,9 @@ Encoder myEnc(2, 3);
 int menuIndex = 0;
 
 
+bool sleeping = false;
+
+int navigation[2][10] = {{1,2,0,0,0,0,0,0,0,0}, {0,3,0,0,0,0,0,0,0}};
 
 
 
@@ -53,6 +56,8 @@ void setup() {
   updateScreen();
 }
 
+
+
 void loop() {
   delay(50);
   
@@ -63,19 +68,18 @@ void loop() {
   if (timeSinceInteraction > 10000){
     
     lcd.clear();
-    
+    sleeping = true;
     sleep_enable();//Enabling sleep mode
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);//Setting the sleep mode, in our case full sleep
     sleep_cpu();//activating sleep mode
   }
   else {
     long newPos = myEnc.read();
-    lcd.setCursor(15, 0);
-     lcd.print(String(newPos));
+
       if (newPos != rotarySelection) {
-        if (abs(rotarySelection - newPos) > 5) {
+        if (abs(rotarySelection*20 - newPos) > 4) {
           lastInteraction = millis();
-          rotarySelection = floor(newPos/25.0);
+          rotarySelection = floor(newPos/20.0);
           updateScreen();
         }
         
@@ -90,12 +94,26 @@ void updateScreen() {
   lcd.clear();
   String options[10] = {"Back", "Back", "Back", "Back", "Back", "Back", "Back", "Back", "Back", "Back"};
   if (menuIndex == 0) {
-    options[0] = "Option 1";
-    options[1] = "Option 2";
+    options[0] = "At Home Foil";
+    options[1] = "Information";
   }
   else if (menuIndex == 1) {
-    options[0] = "SubOption1";
-    options[1] = "SubOption2";
+    options[0] = "Flick Testing";
+    options[1] = "Regular Testing";
+  }
+  else if (menuIndex == 2) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Info Page");
+    return;
+  }
+  else if (menuIndex == 3) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Regular Testing Mode");
+    lcd.setCursor(3, 0);
+    lcd.print("ON!");
+    return;
   }
 
   int optionCount = 0;
@@ -111,8 +129,12 @@ void updateScreen() {
     }
   }
 
-  if ((rotarySelection - baseLine) > optionCount) {
-    baseLine = (rotarySelection - baseLine) - optionCount;
+  if ((rotarySelection - baseLine) > optionCount-1) {
+    baseLine = (rotarySelection+1) - optionCount;
+  }
+
+  if ((rotarySelection - baseLine) < 0) {
+    baseLine = rotarySelection;
   }
 
   if (optionCount <=4) {
@@ -135,13 +157,30 @@ void updateScreen() {
       lcd.print(">");
     }
     lcd.print(options[i]);
-
   }
   lcd.setCursor(4, 20);
   
 
 }
 
+void menuSelect() {
+  int basics[] = {2, 3};
+  bool flag = false;
+  for (int i = 0; i<2; i++) {
+    if (basics[i] == menuIndex) {
+      flag = true;
+    }
+  }
+  
+  if (flag) {
+    menuIndex = 0;
+  }
+  else {
+    menuIndex = navigation[menuIndex][rotarySelection-baseLine];
+    baseLine = rotarySelection;
+  }
+  updateScreen();
+}
 
 void pciSetup(byte pin)
 {
@@ -167,10 +206,22 @@ ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
  
 
 void interruptTriggered(int i) {
-  if (i == 1) {
+  if (sleeping) {
+    if (i == 1) {
     bool buttonState = digitalRead(BUTTON);
-      lastInteraction = millis();
-      sleep_disable();//Disable sleep mode
-      
+    lastInteraction = millis();
+    sleeping = false;
+    updateScreen();
+    sleep_disable();//Disable sleep mode
+    }
   }
+  else {
+    if (i == 1) {
+      bool buttonState = digitalRead(BUTTON);
+      if (buttonState) {
+        menuSelect();
+      }
+    }
+  }
+  
 }
