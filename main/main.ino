@@ -6,12 +6,14 @@
 #endif
 #include <avr/sleep.h>
 #include <Encoder.h>
+#define EI_NOTEXTERNAL
+#include <EnableInterrupt.h>
 
-#define LED_PIN    A0
+#define LED_PIN    A3
 #define LED_COUNT 4
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-const int rs = 12, en = 11, d4 = 7, d5 = 6, d6 = 5, d7 = 4;
+const int rs = 12, en = 11, d4 = 4, d5 = 5, d6 = 6, d7 = 7;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 #define BUTTON 13
@@ -21,7 +23,7 @@ long lastInteraction = 0;
 
 int rotarySelection = 0;
 int baseLine = 0;
-Encoder myEnc(2, 3);
+Encoder myEnc(3, 2);
 
 int menuIndex = 0;
 
@@ -30,39 +32,56 @@ bool sleeping = false;
 
 int navigation[2][10] = {{1,2,0,0,0,0,0,0,0,0}, {0,3,0,0,0,0,0,0,0}};
 
+volatile bool flag = false;
 
+int pressTime;
+
+bool lights[] = {false, false, false, false};
 
 
 void setup() {
-
-  lcd.begin(20, 4);
-  lcd.display();
-  #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
-    clock_prescale_set(clock_div_1);
-  #endif
-
-  strip.begin();          
-  strip.show();            
-  strip.setBrightness(100); 
+  strip.begin();
+  strip.show();
+  strip.setBrightness(100);
   strip.setPixelColor(0, strip.Color(0, 0, 0));
   strip.setPixelColor(1, strip.Color(0, 0, 0));
   strip.setPixelColor(2, strip.Color(0, 0, 0));
   strip.setPixelColor(3, strip.Color(0, 0, 0));
 
+
   strip.show();
+  
+  lastInteraction = millis();
+  lcd.begin(20, 4);
+  lcd.display();
+
+
+  
 
   pinMode(BUTTON, INPUT);
-  pciSetup(BUTTON);
   updateScreen();
+
+  pinMode(A0, INPUT);
+  enableInterrupt(A0, f2, RISING);
+  enableInterrupt(BUTTON, middlePressed, CHANGE);
 }
 
 
 
 void loop() {
   delay(50);
+  lcd.setCursor(13, 3);
+  lcd.print(millis());
+
   
-  
-  
+  for (int i = 0; i < 4; i ++) {
+    if (lights[i]) {
+      strip.setPixelColor(i, strip.Color(255, 0, 0));
+      strip.show();
+      lights[i] = false;
+    }
+  }
+
   
   timeSinceInteraction = millis() - lastInteraction;
   if (timeSinceInteraction > 10000){
@@ -77,7 +96,7 @@ void loop() {
     long newPos = myEnc.read();
 
       if (newPos != rotarySelection) {
-        if (abs(rotarySelection*20 - newPos) > 4) {
+        if (abs(rotarySelection*20 - newPos) >= 20.0) {
           lastInteraction = millis();
           rotarySelection = floor(newPos/20.0);
           updateScreen();
@@ -111,7 +130,7 @@ void updateScreen() {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Regular Testing Mode");
-    lcd.setCursor(3, 0);
+    lcd.setCursor(0, 3);
     lcd.print("ON!");
     return;
   }
@@ -182,46 +201,33 @@ void menuSelect() {
   updateScreen();
 }
 
-void pciSetup(byte pin)
-{
-    *digitalPinToPCMSK(pin) |= bit (digitalPinToPCMSKbit(pin));  // enable pin
-    PCIFR  |= bit (digitalPinToPCICRbit(pin)); // clear any outstanding interrupt
-    PCICR  |= bit (digitalPinToPCICRbit(pin)); // enable interrupt for the group
-}
 
-ISR (PCINT0_vect) // handle pin change interrupt for D8 to D13 here
- {    
-     interruptTriggered(1);
- }
- 
-ISR (PCINT1_vect) // handle pin change interrupt for A0 to A5 here
- {
-     interruptTriggered(2);
- }  
- 
-ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
- {
-     interruptTriggered(0);
- }  
- 
 
-void interruptTriggered(int i) {
+
+
+
+void middlePressed() {
   if (sleeping) {
-    if (i == 1) {
+  
     bool buttonState = digitalRead(BUTTON);
     lastInteraction = millis();
     sleeping = false;
     updateScreen();
     sleep_disable();//Disable sleep mode
-    }
   }
   else {
-    if (i == 1) {
-      bool buttonState = digitalRead(BUTTON);
-      if (buttonState) {
-        menuSelect();
-      }
+    bool buttonState = digitalRead(BUTTON);
+    if (buttonState) {
+      menuSelect();
     }
   }
-  
+}
+
+void f2() {
+      updateScreen();
+      pressTime = millis();
+      lastInteraction = millis();
+      sleeping = false;
+      lights[0] = true;
+      sleep_disable();
 }

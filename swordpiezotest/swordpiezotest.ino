@@ -1,5 +1,5 @@
 unsigned long buttonPressedAt = 0;
-const int BUTTON = A3;
+const int BUTTON = A0;
 bool buttonReleased = false;
 byte buttonPrevState = 0;
 
@@ -11,7 +11,7 @@ void setup() {
 
 void loop() {
 
-  int state = analogRead(BUTTON) > 900;
+  int state = digitalRead(BUTTON);
   
   if (state != buttonPrevState) {
     if (state == HIGH) {

@@ -1,18 +1,13 @@
 #include <Adafruit_NeoPixel.h>
-#ifdef __AVR__
- #include <avr/power.h>
-#endif
 
-#define LED_PIN    A0
+
+#define LED_PIN    A3
 #define LED_COUNT 4
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 
 void setup() {
 
-  #if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
-    clock_prescale_set(clock_div_1);
-  #endif
 
   strip.begin();
   strip.show();
