@@ -34,12 +34,27 @@ int navigation[2][10] = {{1,2,0,0,0,0,0,0,0,0}, {0,3,0,0,0,0,0,0,0}};
 
 volatile bool flag = false;
 
-int pressTime;
+long pressTime;
 
-bool lights[] = {false, false, false, false};
+long lightsOff;
 
+
+bool foilHome2Flag = false;
+volatile bool hitFlags1[] = {false};
+
+volatile bool hitFlagChange1 = false;
+volatile bool hitFlagRise1 = false;
+volatile bool hitFlagFall1 = false;
+
+
+volatile bool skipMain = false;
+volatile bool interRead;
 
 void setup() {
+  Serial.begin(2000000);
+  Serial.println("Started.");
+
+  
   strip.begin();
   strip.show();
   strip.setBrightness(100);
@@ -62,49 +77,128 @@ void setup() {
   updateScreen();
 
   pinMode(A0, INPUT);
-  enableInterrupt(A0, f2, RISING);
-  enableInterrupt(BUTTON, middlePressed, CHANGE);
+  enableInterrupt(A0, f2, CHANGE);
+  
+  enableInterrupt(BUTTON, middlePressed, RISING);
 }
 
 
 
 void loop() {
-  delay(50);
-  lcd.setCursor(13, 3);
-  lcd.print(millis());
+  long startWait = millis();
 
-  
-  for (int i = 0; i < 4; i ++) {
-    if (lights[i]) {
-      strip.setPixelColor(i, strip.Color(255, 0, 0));
-      strip.show();
-      lights[i] = false;
+  // WAIT 50ms but break out if an interrupt happened and something needs to be done
+  while (millis()-startWait < 50) {
+    if (hitFlagChange1) {
+      break;
     }
   }
 
-  
-  timeSinceInteraction = millis() - lastInteraction;
-  if (timeSinceInteraction > 10000){
-    
-    lcd.clear();
-    sleeping = true;
-    sleep_enable();//Enabling sleep mode
-    set_sleep_mode(SLEEP_MODE_PWR_DOWN);//Setting the sleep mode, in our case full sleep
-    sleep_cpu();//activating sleep mode
-  }
-  else {
-    long newPos = myEnc.read();
+  // DETERMINE RISE OR FALL FOR F2
+  if (hitFlagChange1) {
+    if (interRead) {
+      hitFlagRise1 = true;
+      hitFlagFall1 = false;
+      Serial.println("Rising Detected");
+    }
+    else {
+      hitFlagFall1 = true;
+      hitFlagRise1 = false;
+      Serial.println("Falling Detected");
+    }
 
-      if (newPos != rotarySelection) {
-        if (abs(rotarySelection*20 - newPos) >= 20.0) {
-          lastInteraction = millis();
-          rotarySelection = floor(newPos/20.0);
-          updateScreen();
+    if (menuIndex == 3) {
+      // HANDLE RISE AND FALLS for F2
+      if (hitFlagRise1) {
+        Serial.println("LEDs on unconditionally, so is piezo.");
+        setLightsNoStop(true, false, false, false);
+        pressTime = millis();
+        hitFlagRise1 = false;
+        hitFlagChange1 = false;
+        //toneAC(2000);
+      }
+      if (hitFlagFall1) {
+        if (millis() - pressTime >= 15){
+          Serial.println("Valid Hit.");
+          if (millis() - pressTime <= 2000) {
+            Serial.println("Short hit, keep lights on");
+            setLights(true, false, false, false);
+          }
+          else {
+            lightsOff = millis();
+            Serial.println("Long hit, go off.");
+          }
+          
+          
         }
+        else {
+          lightsOff = millis();
+          Serial.println("Flicker, go off.");
+        }
+        hitFlagFall1 = false;
+        hitFlagChange1 = false;
         
       }
+    }
+
+
+
+
+
     
   }
+
+
+  Serial.print("Lights off: ");
+  Serial.println(lightsOff);
+
+
+  if (millis() >= lightsOff) {
+    Serial.println("Lights and piezo off.");
+    strip.setPixelColor(0, strip.Color(0, 0, 0));
+    strip.setPixelColor(1, strip.Color(0, 0, 0));
+    strip.setPixelColor(2, strip.Color(0, 0, 0));
+    strip.setPixelColor(3, strip.Color(0, 0, 0));
+    //toneAC(0);
+    strip.show();
+    
+  }
+
+  if (!skipMain) {
+
+    lcd.setCursor(13, 3);
+    lcd.print(millis());
+  
+    
+    
+  
+    
+    timeSinceInteraction = millis() - lastInteraction;
+    if (timeSinceInteraction > 10000){
+      
+      lcd.clear();
+      sleeping = true;
+      sleep_enable();//Enabling sleep mode
+      set_sleep_mode(SLEEP_MODE_PWR_DOWN);//Setting the sleep mode, in our case full sleep
+      sleep_cpu();//activating sleep mode
+    }
+    else {
+      long newPos = myEnc.read();
+  
+        if (newPos != rotarySelection) {
+          if (abs(rotarySelection*20 - newPos) >= 20.0) {
+            lastInteraction = millis();
+            rotarySelection = floor(newPos/20.0);
+            updateScreen();
+          }
+          
+        }
+      
+    }
+    
+  }
+  
+  
   
 
 }
@@ -132,6 +226,7 @@ void updateScreen() {
     lcd.print("Regular Testing Mode");
     lcd.setCursor(0, 3);
     lcd.print("ON!");
+    skipMain = true;
     return;
   }
 
@@ -183,6 +278,7 @@ void updateScreen() {
 }
 
 void menuSelect() {
+  skipMain = false;
   int basics[] = {2, 3};
   bool flag = false;
   for (int i = 0; i<2; i++) {
@@ -203,6 +299,46 @@ void menuSelect() {
 
 
 
+void setLights(bool a, bool b, bool c, bool d) {
+  if (a) {
+    strip.setPixelColor(0, strip.Color(255, 0, 0));
+  }
+  
+  if (b) {
+    strip.setPixelColor(0, strip.Color(255, 255, 255));
+  }
+
+  if (c) {
+    strip.setPixelColor(0, strip.Color(255, 255, 255));
+  }
+
+  if (d) {
+    strip.setPixelColor(0, strip.Color(0, 0, 255));
+  }
+  strip.show();
+
+  lightsOff = millis() + 2000;
+}
+
+void setLightsNoStop(bool a, bool b, bool c, bool d) {
+  if (a) {
+    strip.setPixelColor(0, strip.Color(255, 0, 0));
+  }
+  
+  if (b) {
+    strip.setPixelColor(0, strip.Color(255, 255, 255));
+  }
+
+  if (c) {
+    strip.setPixelColor(0, strip.Color(255, 255, 255));
+  }
+
+  if (d) {
+    strip.setPixelColor(0, strip.Color(0, 0, 255));
+  }
+  strip.show();
+  lightsOff = millis() + 999999;
+}
 
 
 
@@ -216,18 +352,19 @@ void middlePressed() {
     sleep_disable();//Disable sleep mode
   }
   else {
-    bool buttonState = digitalRead(BUTTON);
-    if (buttonState) {
-      menuSelect();
-    }
+    menuSelect();
   }
 }
 
 void f2() {
-      updateScreen();
-      pressTime = millis();
-      lastInteraction = millis();
-      sleeping = false;
-      lights[0] = true;
-      sleep_disable();
+    if (menuIndex == 3) {
+      hitFlagChange1 = true;
+      interRead = digitalRead(A0) == HIGH;
+    lastInteraction = millis();
+    sleeping = false;
+    sleep_disable();
+    }
+    
+  
+      
 }
