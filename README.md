@@ -1,5 +1,5 @@
 # OpenBox  
-An open source, arduino based fencing score box. Created with a low budget in mind (costs ~£50 to build), but maximal portability and functionality.  
+An open source, arduino based fencing scoring box. Created with a low budget in mind (costs ~£50 to build), but maximal portability and functionality.  
   
 
 ![Picture of the box](https://github.com/bhuvan21/OpenBox/blob/master/box.jpg?raw=true)  
