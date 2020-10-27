@@ -1,3 +1,4 @@
+
 #include <LiquidCrystal.h>
 #include <toneAC.h>
 #include <Adafruit_NeoPixel.h>
@@ -30,7 +31,7 @@ int menuIndex = 0;
 
 bool sleeping = false;
 
-int navigation[2][10] = {{1,2,0,0,0,0,0,0,0,0}, {0,3,0,0,0,0,0,0,0}};
+int navigation[6][10] = {{1,2,4,0,0,0,0,0,0,0}, {0,3,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0,0,0}, {5,0,0,0,0,0,0,0,0,0}, {0,0,0,0,0,0,0,0,0,0}};
 
 volatile bool flag = false;
 
@@ -49,6 +50,12 @@ volatile bool hitFlagFall1 = false;
 
 volatile bool skipMain = false;
 volatile bool interRead;
+
+volatile long hitGo;
+
+bool buttonPressed = false;
+
+uint32_t selectedColor2 = strip.Color(0, 0, 255);
 
 void setup() {
   Serial.begin(2000000);
@@ -77,7 +84,7 @@ void setup() {
   updateScreen();
 
   pinMode(A0, INPUT);
-  enableInterrupt(A0, f2, CHANGE);
+  enableInterrupt(A0, f3, RISING);
   
   enableInterrupt(BUTTON, middlePressed, RISING);
 }
@@ -96,70 +103,45 @@ void loop() {
 
   // DETERMINE RISE OR FALL FOR F2
   if (hitFlagChange1) {
-    if (interRead) {
-      hitFlagRise1 = true;
-      hitFlagFall1 = false;
-      Serial.println("Rising Detected");
+    Serial.print("Rising:");
+    
+    while (digitalRead(A0) == HIGH) {
+      if (millis() - hitGo >= 13) {
+        setLightsNoStop(true, false, false, false);
+        //toneAC(2000);
+
+      }
+    }
+    int pressed = millis() - hitGo;
+    if (pressed >= 13) {
+      Serial.print("Sucessful Hit of length");
+      Serial.println(pressed);
+      setLights(true, false, false, false);
+      toneAC(2000);
     }
     else {
-      hitFlagFall1 = true;
-      hitFlagRise1 = false;
-      Serial.println("Falling Detected");
+      Serial.print("Fail Hit of length");
+      Serial.println(pressed);
+      lightsOff = millis();
     }
 
-    if (menuIndex == 3) {
-      // HANDLE RISE AND FALLS for F2
-      if (hitFlagRise1) {
-        Serial.println("LEDs on unconditionally, so is piezo.");
-        setLightsNoStop(true, false, false, false);
-        pressTime = millis();
-        hitFlagRise1 = false;
-        hitFlagChange1 = false;
-        //toneAC(2000);
-      }
-      if (hitFlagFall1) {
-        if (millis() - pressTime >= 15){
-          Serial.println("Valid Hit.");
-          if (millis() - pressTime <= 2000) {
-            Serial.println("Short hit, keep lights on");
-            setLights(true, false, false, false);
-          }
-          else {
-            lightsOff = millis();
-            Serial.println("Long hit, go off.");
-          }
-          
-          
-        }
-        else {
-          lightsOff = millis();
-          Serial.println("Flicker, go off.");
-        }
-        hitFlagFall1 = false;
-        hitFlagChange1 = false;
-        
-      }
-    }
-
-
-
+    hitFlagChange1 = false;
 
 
     
   }
 
 
-  Serial.print("Lights off: ");
-  Serial.println(lightsOff);
+
 
 
   if (millis() >= lightsOff) {
-    Serial.println("Lights and piezo off.");
+    //Serial.println("Lights and piezo off.");
     strip.setPixelColor(0, strip.Color(0, 0, 0));
     strip.setPixelColor(1, strip.Color(0, 0, 0));
     strip.setPixelColor(2, strip.Color(0, 0, 0));
     strip.setPixelColor(3, strip.Color(0, 0, 0));
-    //toneAC(0);
+    toneAC(0);
     strip.show();
     
   }
@@ -209,6 +191,7 @@ void updateScreen() {
   if (menuIndex == 0) {
     options[0] = "At Home Foil";
     options[1] = "Information";
+    options[2] = "Settings";
   }
   else if (menuIndex == 1) {
     options[0] = "Flick Testing";
@@ -228,6 +211,14 @@ void updateScreen() {
     lcd.print("ON!");
     skipMain = true;
     return;
+  }
+  else if (menuIndex == 4) {
+    options[0] = "Light #1 Colors";
+  }
+  else if (menuIndex == 5) {
+    options[0] = "Red";
+    options[1] = "Blue";
+    options[2] = "Pink";
   }
 
   int optionCount = 0;
@@ -286,6 +277,18 @@ void menuSelect() {
       flag = true;
     }
   }
+
+  if (menuIndex == 5) {
+    if (rotarySelection-baseLine == 0) {
+      selectedColor2 = strip.Color(255, 0, 0);
+    }
+    else if (rotarySelection-baseLine == 1) {
+      selectedColor2 = strip.Color(0, 0, 255);
+    }
+    else if (rotarySelection-baseLine == 2) {
+      selectedColor2 = strip.Color(255, 108, 180);
+    }
+  }
   
   if (flag) {
     menuIndex = 0;
@@ -301,7 +304,7 @@ void menuSelect() {
 
 void setLights(bool a, bool b, bool c, bool d) {
   if (a) {
-    strip.setPixelColor(0, strip.Color(255, 0, 0));
+    strip.setPixelColor(0,selectedColor2);
   }
   
   if (b) {
@@ -322,7 +325,7 @@ void setLights(bool a, bool b, bool c, bool d) {
 
 void setLightsNoStop(bool a, bool b, bool c, bool d) {
   if (a) {
-    strip.setPixelColor(0, strip.Color(255, 0, 0));
+    strip.setPixelColor(0, selectedColor2);
   }
   
   if (b) {
@@ -343,28 +346,48 @@ void setLightsNoStop(bool a, bool b, bool c, bool d) {
 
 
 void middlePressed() {
-  if (sleeping) {
-  
-    bool buttonState = digitalRead(BUTTON);
-    lastInteraction = millis();
-    sleeping = false;
-    updateScreen();
-    sleep_disable();//Disable sleep mode
+  if (buttonPressed) {
+    buttonPressed = false;
   }
   else {
-    menuSelect();
+    buttonPressed = true;
+     if (sleeping) {
+    
+      //bool buttonState = digitalRead(BUTTON);
+      lastInteraction = millis();
+      sleeping = false;
+      updateScreen();
+      sleep_disable();//Disable sleep mode
+    }
+    else {
+      menuSelect();
+    }
   }
+
+}
+
+void f3() {
+  hitGo = millis();
+  hitFlagChange1 = true;
+  lastInteraction = millis();
+  sleeping = false;
+  sleep_disable();
 }
 
 void f2() {
+  int t = PINC;
+  int a = t & B00000001;
+  if (a == 0) {
+    interRead = false;
+  }
+  else {
+    interRead = true;
+  }
     if (menuIndex == 3) {
       hitFlagChange1 = true;
-      interRead = digitalRead(A0) == HIGH;
+      
     lastInteraction = millis();
     sleeping = false;
     sleep_disable();
     }
-    
-  
-      
 }
